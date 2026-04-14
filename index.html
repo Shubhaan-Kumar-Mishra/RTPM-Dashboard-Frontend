@@ -743,8 +743,14 @@
   <script src="Realtime.js"></script>
 
   <script>
+    const API_BASE = "https://rtpm-dashboard.onrender.com/api";
+
+    function getToken() {
+      return sessionStorage.getItem("token") || localStorage.getItem("token");
+    }
+
     /* ── Auth guard ── */
-    if (sessionStorage.getItem("auth") !== "true") {
+    if (!getToken() || sessionStorage.getItem("auth") !== "true") {
       window.location.href = "login.html";
     }
 
@@ -838,7 +844,14 @@
       if (dueDate)   payload.dueDate   = dueDate;
 
       try {
-        const res = await fetch('https://rtpm-dashboard.onrender.com/api/tasks', {
+        const token = getToken();
+      if (!token) {
+        showToast('✗ Authentication token missing. Please login again.', 'error');
+        window.location.href = 'login.html';
+        return;
+      }
+
+      const res = await fetch(`${API_BASE}/tasks`, {
           method:  'POST',
           headers: {
             'Content-Type':  'application/json',
@@ -861,7 +874,7 @@
       } catch (err) {
         /* Network error (server offline) gives a generic message */
         const msg = err.message === 'Failed to fetch'
-          ? 'Cannot reach server — is localhost:5000 running?'
+          ? `Cannot reach server — make sure ${API_BASE} is accessible.`
           : err.message;
         showToast('✗ ' + msg, 'error');
       } finally {
