@@ -686,6 +686,14 @@
         <textarea class="nt-textarea" id="ntDesc" placeholder="What needs to be done?"></textarea>
       </div>
 
+      <!-- Project -->
+      <div class="nt-group">
+        <label class="nt-label">Project <span style="color:#fc5c7d">*</span></label>
+        <select class="nt-select" id="ntProject">
+          <option value="">Select a project</option>
+        </select>
+      </div>
+
       <!-- Status + Due Date -->
       <div class="nt-row">
         <div class="nt-group">
@@ -744,9 +752,57 @@
 
   <script>
     const API_BASE = "https://rtpm-dashboard-backend-2.onrender.com/api";
+    let projectsCache = [];
 
     function getToken() {
       return sessionStorage.getItem("token") || localStorage.getItem("token");
+    }
+
+    async function fetchProjects() {
+      const select = document.getElementById('ntProject');
+      if (!select) return;
+
+      const token = getToken();
+      if (!token) {
+        showToast('✗ Authentication token missing. Please login again.', 'error');
+        window.location.href = 'login.html';
+        return;
+      }
+
+      try {
+        const res = await fetch(`${API_BASE}/projects`, {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': 'Bearer ' + token
+          }
+        });
+
+        if (!res.ok) {
+          throw new Error('Unable to load projects.');
+        }
+
+        const data = await res.json();
+        projectsCache = Array.isArray(data) ? data : (data.projects || []);
+        populateProjectSelect(projectsCache);
+      } catch (err) {
+        console.error('Project load error:', err);
+        showToast('✗ Cannot load projects. Please try again.', 'error');
+        populateProjectSelect([]);
+      }
+    }
+
+    function populateProjectSelect(projects) {
+      const select = document.getElementById('ntProject');
+      if (!select) return;
+      select.innerHTML = '<option value="">Select a project</option>';
+      projects.forEach(function (project) {
+        const title = project.title || project.name || 'Untitled Project';
+        const option = document.createElement('option');
+        option.value = project._id || project.id || '';
+        option.textContent = title;
+        select.appendChild(option);
+      });
     }
 
     /* ── Auth guard ── */
@@ -761,6 +817,7 @@
 
     function openNewTaskModal() {
       document.getElementById('newTaskModal').classList.add('open');
+      fetchProjects();
       document.getElementById('ntTitle').focus();
     }
 
@@ -797,6 +854,7 @@
       document.getElementById('ntDesc').value = '';
       document.getElementById('ntStatus').value = 'todo';
       document.getElementById('ntDue').value = '';
+      document.getElementById('ntProject').value = '';
       setPriority('high');
     }
 
@@ -817,12 +875,18 @@
       const desc      = document.getElementById('ntDesc').value.trim();
       const status    = document.getElementById('ntStatus').value;
       const dueDate   = document.getElementById('ntDue').value;
-      const token     = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5ZGE4NzRjN2FkMTg1YTUzM2I4NjM2MSIsInJvbGUiOiJtYW5hZ2VyIiwiaWF0IjoxNzc2MDA4MzM3LCJleHAiOjE3NzYwOTQ3Mzd9.XUSUcBKeO9SPfofdLH6hskWzMg_DY_VBPNT2MvWzx5k";
+      const projectId = document.getElementById('ntProject').value;
 
       /* Validation */
       if (!title) {
         showToast('⚠ Title is required', 'error');
         document.getElementById('ntTitle').focus();
+        return;
+      }
+
+      if (!projectId) {
+        showToast('⚠ Project is required', 'error');
+        document.getElementById('ntProject').focus();
         return;
       }
 
@@ -834,24 +898,24 @@
       spinner.style.display = 'block';
       label.textContent     = 'Creating…';
 
-      /* Build payload — only include optional fields if they have values */
       const payload = {
         title:       title,
         description: desc,
         priority:    ntPriority,
-        status:      status
+        status:      status,
+        projectId:   projectId
       };
-      if (dueDate)   payload.dueDate   = dueDate;
+      if (dueDate) payload.dueDate = dueDate;
 
       try {
         const token = getToken();
-      if (!token) {
-        showToast('✗ Authentication token missing. Please login again.', 'error');
-        window.location.href = 'login.html';
-        return;
-      }
+        if (!token) {
+          showToast('✗ Authentication token missing. Please login again.', 'error');
+          window.location.href = 'login.html';
+          return;
+        }
 
-      const res = await fetch(`${API_BASE}/tasks`, {
+        const res = await fetch(`${API_BASE}/tasks`, {
           method:  'POST',
           headers: {
             'Content-Type':  'application/json',
